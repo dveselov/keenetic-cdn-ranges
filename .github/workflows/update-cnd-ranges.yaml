@@ -2,10 +2,8 @@ name: Update Keenetic CDN Ranges
 
 on:
   schedule:
-    # Run daily at 3:00 AM UTC
-    - cron: "0 3 * * *"
-  # Allow manual trigger from Actions tab
-  workflow_dispatch:
+    - cron: "0 3 * * *" # daily at 03:00 UTC
+  workflow_dispatch: # manual trigger
 
 permissions:
   contents: write
@@ -15,37 +13,42 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout your own repository
         uses: actions/checkout@v4
         with:
-          # Fetch full history so we can commit
           fetch-depth: 0
 
-      - name: Download latest CDN IP ranges
+      - name: Clone the original CDN IP ranges repository
         run: |
-          curl -L -o cdn-only_plain.txt \
-            https://raw.githubusercontent.com/123jjck/cdn-ip-ranges/refs/heads/main/cdn-only/cdn-only_plain.txt
-        shell: bash
+          git clone --depth 1 https://github.com/123jjck/cdn-ip-ranges.git source-repo
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Convert to Keenetic format
-        run: python .github/scripts/convert_for_keenetic_action.py
+      - name: Run the original conversion script
+        run: |
+          cd source-repo
+          # The script checks for GITHUB_ACTIONS and exits – unset it
+          unset GITHUB_ACTIONS
+          python scripts/convert_for_keenetic.py --all
 
-      - name: Commit and push if changed
+      - name: Copy generated .bat files to your repo root
+        run: |
+          # The script writes *.bat files inside source-repo/
+          cp source-repo/*.bat ./
+
+      - name: Commit and push if changes exist
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Check if files changed
-          if [[ -n $(git status --porcelain) ]]; then
-            git add cdn-only_keenetic.bat
-            git commit -m "Update Keenetic CDN ranges (daily)"
-            git push
-          else
+          git add *.bat
+
+          if git diff --staged --quiet; then
             echo "No changes to commit"
+          else
+            git commit -m "Update Keenetic CDN ranges (daily, from cloned repo)"
+            git push
           fi
-        shell: bash
