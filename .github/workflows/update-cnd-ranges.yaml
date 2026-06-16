@@ -37,7 +37,7 @@ jobs:
       - name: Copy generated .bat files to your repo root
         run: |
           # The script writes *.bat files inside source-repo/
-          cp source-repo/*.bat ./
+          cp source-repo/scripts/*.bat ./
 
       - name: Commit and push if changes exist
         run: |
