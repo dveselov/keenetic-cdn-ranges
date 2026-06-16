@@ -1,0 +1,51 @@
+name: Update Keenetic CDN Ranges
+
+on:
+  schedule:
+    # Run daily at 3:00 AM UTC
+    - cron: "0 3 * * *"
+  # Allow manual trigger from Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history so we can commit
+          fetch-depth: 0
+
+      - name: Download latest CDN IP ranges
+        run: |
+          curl -L -o cdn-only_plain.txt \
+            https://raw.githubusercontent.com/123jjck/cdn-ip-ranges/refs/heads/main/cdn-only/cdn-only_plain.txt
+        shell: bash
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Convert to Keenetic format
+        run: python .github/scripts/convert_for_keenetic_action.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Check if files changed
+          if [[ -n $(git status --porcelain) ]]; then
+            git add cdn-only_keenetic.bat
+            git commit -m "Update Keenetic CDN ranges (daily)"
+            git push
+          else
+            echo "No changes to commit"
+          fi
+        shell: bash
