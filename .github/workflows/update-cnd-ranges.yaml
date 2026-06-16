@@ -1,4 +1,4 @@
-name: Update Keenetic CDN Ranges
+name: Update Keenetic CDN Ranges (Release)
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch: # manual trigger
 
 permissions:
-  contents: write
+  contents: write # needed to push tags and create releases
 
 jobs:
   update:
@@ -16,7 +16,7 @@ jobs:
       - name: Checkout your own repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # needed to push tags
 
       - name: Clone the original CDN IP ranges repository
         run: |
@@ -30,25 +30,35 @@ jobs:
       - name: Run the original conversion script
         run: |
           cd source-repo
-          # The script checks for GITHUB_ACTIONS and exits – unset it
+          # The script checks for GITHUB_ACTIONS – unset to bypass
           unset GITHUB_ACTIONS
           python scripts/convert_for_keenetic.py --all
 
-      - name: Copy generated .bat files to your repo root
+      - name: Prepare release assets
         run: |
-          # The script writes *.bat files inside source-repo/
-          cp source-repo/scripts/*.bat ./
+          # Copy all .bat files to a separate folder for upload
+          mkdir -p release-assets
+          cp source-repo/scripts/*.bat release-assets/
 
-      - name: Commit and push if changes exist
+      - name: Create/update release with assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Set up git user for tag operations
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add *.bat
+          # Use a fixed tag (force-update it to the current commit)
+          TAG="cdn-ranges-latest"
+          git tag -f "$TAG"
+          git push -f origin "$TAG"
 
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Update Keenetic CDN ranges (daily, from cloned repo)"
-            git push
-          fi
+          # Delete existing release (if any) to avoid asset conflicts
+          gh release delete "$TAG" -y || true
+
+          # Create a new release with today's date as the title
+          DATE=$(date -u +"%Y-%m-%d")
+          gh release create "$TAG" \
+            --title "Latest CDN Ranges ($DATE)" \
+            --notes "Daily update from upstream CDN ranges. Generated on $DATE UTC." \
+            release-assets/*.bat
